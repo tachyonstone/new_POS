@@ -155,11 +155,6 @@ void create_sql(char* sql1, char* sql2){
 }
 
 int main(int argc, char *argv[]){
-  char *dbHost = "kite.cs.miyazaki-u.ac.jp";
-  char *dbPort = "5432";
-  char *dbName = "db42";
-  char *dbLogin = "dbuser42";
-  char *dbPwd = "dbpass42";
   char connInfo[BUFSIZE];
   char sql[BUFSIZE];
   char command[BUFSIZE];
