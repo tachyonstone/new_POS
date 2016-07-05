@@ -119,10 +119,6 @@ int create_new_direction_func(PGconn *__con,char *store_num,char *item_code,char
   }
 
 
-
-
-
-
   /* PGresultに割当られた記憶領域を開放 */
   PQclear(res);
   return 0;
@@ -131,7 +127,7 @@ int create_new_direction_func(PGconn *__con,char *store_num,char *item_code,char
 
 
 ///////////////////////
-int create_direction_func(PGconn *__con,char *item_code,char *available_period, char *inventory_num, char *__sendBuf){
+int create_direction_func(PGconn *__con, int order_code_int, int ship_store_num_int, int item_code_int, char *purchase_unit_price, char *purchase_num, char *available_period, char *__sendBuf){
   char sql[BUFSIZE];
   char sql0[BUFSIZE];
   char sql1[BUFSIZE];
@@ -145,41 +141,84 @@ int create_direction_func(PGconn *__con,char *item_code,char *available_period, 
   int         resultRows;
   int max;
 
-  int ship_store_num_int;
-  int item_code_int;
   int order_day_int;
   int available_period_int;
   int inventory_num_int;
   char purchase_code_seq[BUFSIZE];
   int nextval;
   int max_row;
+  int max_row1;
   int store_num_int;
+  int purchase_unit_price_int;
+  int purchase_num_int;
 
   int i,j;
+
+
+  purchase_unit_price_int = atoi(purchase_unit_price);
+  purchase_num_int = atoi(purchase_num);
+  available_period_int = atoi(available_period);
 
   //store_num_int = atoi(store_num);
   //item_code_int = atoi(item_code);
   //available_period_int = atoi(available_period);
   //inventory_num_int = atoi(inventory_num);
 
-
+  /*商品補充指示書追加*/
+  sprintf(sql1, "UPDATE item_sup_direction\
+                 SET purchase_unit_price = %d,\
+                     purchase_num = %d,\
+                     available_period = %d,\
+                     purchase_confirm = 'true'\
+                 WHERE order_code = %d\
+                 AND purchase_confirm = 'false'"
+		  ,purchase_unit_price_int
+		  ,purchase_num_int
+		  ,available_period_int
+		  ,order_code_int
+		  );
+  /* SQLコマンド実行 */
+  res1 = PQexec(__con, sql1);
+  /* SQLコマンド実行結果状態を確認 */
+  if( PQresultStatus(res1) != PGRES_COMMAND_OK){
+	printf("%s", PQresultErrorMessage(res1));
+	sprintf(__sendBuf, "%s %s%s test:%s", "ER_STAT2", "E_CODE", sql1,"\n");
+	return -1;
+  }
 
 
   /* 在庫管理追加SQLを作成 */
 
-  sprintf(sql0, "select * from nextval ('item_management_%d_purchase_code_seq')"
-		  , store_num_int
+  sprintf(sql0, "insert into item_management_%d values (\
+                 nextval ('item_management_%d_purchase_code_seq'),\
+                 %d,\
+                 %d,\
+                 %d,\
+                 NULL,\
+                 NULL,\
+                 NULL,\
+                 NULL,\
+                 NULL,\
+                 'false',\
+                 NULL,\
+                 NULL)"
+		  ,ship_store_num_int
+		  ,ship_store_num_int
+		  ,item_code_int
+		  ,available_period_int
+		  ,purchase_num_int  //
 		  );
-  /* SQLコマンド実行 */
-  res0 = PQexec(__con, sql0);
+
+	/* SQLコマンド実行 */
+	res0 = PQexec(__con, sql0);
   /* SQLコマンド実行結果状態を確認 */
-  if( PQresultStatus(res0) != PGRES_TUPLES_OK){
+  if( PQresultStatus(res0) != PGRES_COMMAND_OK){
 	printf("%s", PQresultErrorMessage(res0));
 	sprintf(__sendBuf, "%s %s%s test:%s", "ER_STAT2", "E_CODE", sql0,"\n");
 	return -1;
   }
 
-  nextval = atoi(PQgetvalue(res0,0,0));
+  //nextval = atoi(PQgetvalue(res0,0,0));
 
   /* UPDATEされた行数を取得 */
   if(atoi(PQcmdTuples(res0)) == 1){
@@ -187,40 +226,37 @@ int create_direction_func(PGconn *__con,char *item_code,char *available_period, 
   }
 
 
-  sprintf(sql, "INSERT INTO item_management_%d VALUES(%d,%d,%d,%d,%s,%s,%s,%s,%s,%s,%s,%s)"
-		  , store_num_int
-		  , nextval
-		  , item_code_int
-		  , available_period_int
-		  , inventory_num_int
-		  , "null"
-		  , "null"
-		  , "null"
-		  , "null"
-		  , "null"
-		  , "null"
-		  , "null"
-		  , "null"
+  /*sprintf(sql, "UPDATE item_sup_direction SET	\
+	purchase_unit_price=%d,\
+	purchace_num=%d,\
+	available_period=%d,\
+	purchase_confilm=1"
+		  ,purchase_unit_price_int
+		  ,purchase_num_int
+		  ,available_period_int
 		  );
+  */
+
   /* SQLコマンド実行 */
-  res = PQexec(__con, sql);
+  //res = PQexec(__con, sql);
   /* SQLコマンド実行結果状態を確認 */
-  if( PQresultStatus(res) != PGRES_COMMAND_OK){
+  /*if( PQresultStatus(res) != PGRES_COMMAND_OK){
 	printf("%s", PQresultErrorMessage(res));
 	sprintf(__sendBuf, "%s %s%s test:%s", "ER_STAT", "E_CODE", sql,"\n");
 	return -1;
-  }
+	}*/
   /* UPDATEされた行数を取得 */
-  if(atoi(PQcmdTuples(res)) == 1){
+  /*if(atoi(PQcmdTuples(res)) == 1){
 	sprintf(__sendBuf, "%s%s", "配送しました", ENTER);
-  }
-
-
+	}*/
 
 
 
 
   /* PGresultに割当られた記憶領域を開放 */
-  PQclear(res);
+  //PQclear(res);
+  PQclear(res0);
+  PQclear(res1);
+
   return 0;
 }//END
