@@ -45,9 +45,13 @@ void *pos_controller(void *__arg){
   int order_day_int;
   int available_period_int;
   int inventory_num_int;
+  int order_code_int;
   char purchase_code_seq[BUFSIZE];
   int nextval;
   int max_row;
+
+  char purchase_unit_price[BUFSIZE];
+  char  purchase_num[BUFSIZE];
 
 
   selfId = pthread_self(); //自分自身のスレッドIDを取得
@@ -83,13 +87,10 @@ void *pos_controller(void *__arg){
 
 	  /* 商品補充指示書完成SQLを作成 */
 
-	  sprintf(sql0, " select ship_store_num,\
-                         item_code,\
-                         order_day,\
-                         order_system\
-                         from item_sup_direction\
-                         where purchase_confirm = 'false'"
-			  );
+	  sprintf(sql0, "SELECT * FROM item_sup_direction\
+                 WHERE order_code = (SELECT MIN(order_code)\
+                 FROM item_sup_direction \
+                 WHERE purchase_confirm = 'false')");
 
 
 	  /* SQLコマンド実行 */
@@ -103,47 +104,51 @@ void *pos_controller(void *__arg){
 
 	  max_row = PQntuples(res0);
 
+		/* UPDATEされた行数を取得 */
+		if(max_row != 1){
+		  sprintf(sendBuf, "%s%s", "新しい発注はありません。", ENTER);
+		  }
+
 	  for(i=0; i<max_row; i++){ /////////////////
 
-		ship_store_num_int = atoi(PQgetvalue(res0,i,0));
-		item_code_int = atoi(PQgetvalue(res0,i,1));
+		order_code_int = atoi(PQgetvalue(res0,i,0));  //発注番号取得
+		ship_store_num_int = atoi(PQgetvalue(res0,i,1));  //店舗番号取得
+		item_code_int = atoi(PQgetvalue(res0,i,2));  //商品コード取得
 
-
+		///送り先店舗名・商品番号表示
 		sprintf(sendBuf, "%d %d\n", ship_store_num_int,	item_code_int );
 		sendLen = strlen(sendBuf);
 		send(threadParam->soc, sendBuf, sendLen, 0);
 		printf("[C_THREAD %u] SEND=> %s\n", selfId, sendBuf);
 
-		//	PQclear(res0);
+
+		/* リクエストコマンド受信 */
+		recvLen = receive_message(threadParam->soc, recvBuf, BUFSIZE);
+		if( recvLen < 1 )
+		  break;
+		recvBuf[recvLen-1] = '\0'; // <LF>を消去
+		printf("[C_THREAD %u] RECV=> %s\n", selfId, recvBuf);
+		/* リクエストコマンド解析 */
+		cnt = sscanf(recvBuf, "%s", comm);
+		printf("%s\n",comm);
+
+		/* UPDATEされた行数を取得 */
+		/*if(atoi(PQcmdTuples(res0)) == 1){
+		  sprintf(__sendBuf, "%s%s", "ok", ENTER);
+		  }*/
+
+
+		/*登録*/
+		if( sscanf(recvBuf,"%s %s %s", purchase_unit_price, purchase_num, available_period) == 3){
+		  create_direction_func(threadParam->con, order_code_int, ship_store_num_int, item_code_int, purchase_unit_price, purchase_num, available_period, sendBuf);
+		}else{
+		  sprintf(sendBuf, "%s\n","ER_STAT"); //temp.
+		}
+
 
 	  }
 
-	  /* リクエストコマンド受信 */
-	  recvLen = receive_message(threadParam->soc, recvBuf, BUFSIZE);
-	  if( recvLen < 1 )
-		break;
-	  recvBuf[recvLen-1] = '\0'; // <LF>を消去
-	  printf("[C_THREAD %u] RECV=> %s\n", selfId, recvBuf);
-	  /* リクエストコマンド解析 */
-	  cnt = sscanf(recvBuf, "%s", comm);
-	  printf("%s\n",comm);
 
-
-
-	  /* UPDATEされた行数を取得 */
-	  /*if(atoi(PQcmdTuples(res0)) == 1){
-		sprintf(__sendBuf, "%s%s", "ok", ENTER);
-		}*/
-
-
-
-
-	  /*登録*/
-	  if( sscanf(recvBuf,"%s %s %s %s %s", comm2, store_num, item_code, available_period,inventory_num) == 5){
-		create_direction_func(threadParam->con, store_num, item_code, available_period, inventory_num, sendBuf);
-	  }else{
-		sprintf(sendBuf, "%s\n","ER_STAT"); //temp.
-	  }
 	}else if(strcmp( comm, "CREATE_STORE" ) == 0){  //create_store
 	  /*新店舗登録*/
 	  if( sscanf(recvBuf,"%s %s %s %s", comm2, place_num, store_name, password) == 4){
@@ -152,10 +157,6 @@ void *pos_controller(void *__arg){
 		sprintf(sendBuf, "%s\n","ER_STAT"); //temp.
 	  }
 	}
-
-
-
-
 
 
 	sendLen = strlen(sendBuf);
