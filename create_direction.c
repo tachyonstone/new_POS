@@ -11,8 +11,6 @@
  *    Error   : -1
  */
 
-
-
 int create_direction_recv_func(ThreadParameter *threadParam, char *sendBuf){
   char recvBuf[BUFSIZE];
   int  recvLen, sendLen;
@@ -41,10 +39,12 @@ int create_direction_recv_func(ThreadParameter *threadParam, char *sendBuf){
   char sql0[BUFSIZE];
   char sql1[BUFSIZE];
   char sql2[BUFSIZE];
+  char sql3[BUFSIZE];
   PGresult    *res;   //PGresultオブジェクト
   PGresult    *res0;   //PGresultオブジェクト
   PGresult    *res1;   //PGresultオブジェクト
   PGresult    *res2;   //PGresultオブジェクト
+  PGresult    *res3;   //PGresultオブジェクト
 
   int ship_store_num_int;
   int item_code_int;
@@ -63,6 +63,8 @@ int create_direction_recv_func(ThreadParameter *threadParam, char *sendBuf){
 
   char purchase_num_ch[BUFSIZE];
   char order_system[BUFSIZE];
+
+  char item_num[BUFSIZE];
 
   int count = 0;
 
@@ -92,7 +94,7 @@ int create_direction_recv_func(ThreadParameter *threadParam, char *sendBuf){
   }
 
 
-  PQclear(res0);
+  //PQclear(res0);
 
   ///resend送り先店舗名・商品番号表示
   count += sprintf(sendBuf, "以下のような発注依頼が来ています。\n");
@@ -141,13 +143,44 @@ int create_direction_recv_func(ThreadParameter *threadParam, char *sendBuf){
 
 	purchase_num_int = atoi(purchase_num_ch);
 
-	///送り先店舗名・商品番号表示
+
+	sprintf(sql2, "select item_name from item where item_code= %d"
+			,item_code_int);
+
+	/* SQLコマンド実行 */
+	res2 = PQexec(threadParam->con, sql2);
+	/* SQLコマンド実行結果状態を確認 */
+	if( PQresultStatus(res2) != PGRES_TUPLES_OK){
+	  printf("%s", PQresultErrorMessage(res2));
+	  sprintf(sendBuf, "%s %s%s test:%s", "ER_STAT2", "E_CODE", sql2,"\n");
+	  return -1;
+	}
+
+	strcpy(item_name, PQgetvalue(res2,0,0));
+
+	///////
+	sprintf(sql3, "select store_name from store where store_num = %d"
+			, ship_store_num_int);
+
+	/* SQLコマンド実行 */
+	res3 = PQexec(threadParam->con, sql3);
+	/* SQLコマンド実行結果状態を確認 */
+	if( PQresultStatus(res3) != PGRES_TUPLES_OK){
+	  printf("%s", PQresultErrorMessage(res3));
+	  sprintf(sendBuf, "%s %s%s test:%s", "ER_STAT2", "E_CODE", sql3,"\n");
+	  return -1;
+	}
+
+	strcpy(store_name, PQgetvalue(res3,0,0));
+
+
+	///送り先店舗名・商品表示
 	if(strcmp(order_system,"t") == 0){
-	  count += sprintf(sendBuf+count,"送り先店舗番号：%d 商品番号：%d\n", ship_store_num_int, item_code_int );
+	  count += sprintf(sendBuf+count,"送り先店舗：%s 商品名：%s\n", store_name, item_name );
 	}else{
-	  count += sprintf(sendBuf+count,"送り先店舗番号：%d 商品番号：%d 入荷数：%d\n"
-					   , ship_store_num_int
-					   , item_code_int
+	  count += sprintf(sendBuf+count,"送り先店舗：%s 商品名：%s 入荷数：%d\n"
+					   , store_name
+					   , item_name
 					   , purchase_num_int);
 	}
 
@@ -163,10 +196,12 @@ int create_direction_recv_func(ThreadParameter *threadParam, char *sendBuf){
   /*発注依頼表示*/
   for(i=0; i<max_row_1; i++){
 
+	memset(sql0, 0, BUFSIZE);
+
 	sprintf(sql0, "SELECT * FROM item_sup_direction\
                      WHERE order_code = (SELECT MIN(order_code)\
                      FROM item_sup_direction \
-                     WHERE purchase_confirm = 'false')");
+                     WHERE purchase_confirm = 'false')" );
 
 
 	/* SQLコマンド実行 */
@@ -182,27 +217,58 @@ int create_direction_recv_func(ThreadParameter *threadParam, char *sendBuf){
 	order_code_int = atoi(PQgetvalue(res0,0,0));  //発注番号取得
 	ship_store_num_int = atoi(PQgetvalue(res0,0,1));  //店舗番号取得
 	item_code_int = atoi(PQgetvalue(res0,0,2));  //商品コード取得
-	strcpy(purchase_num, PQgetvalue(res0,i,5));  //入荷数取得 //ch
-    strcpy(order_system, PQgetvalue(res0,i,8));  //発注方式取得
+	strcpy(purchase_num_ch, PQgetvalue(res0,0,5));  //入荷数取得 //ch
+    strcpy(order_system, PQgetvalue(res0,0,8));  //発注方式取得
 
 	PQclear(res0);
 
 	purchase_num_int = atoi(purchase_num_ch);
+
+
+	sprintf(sql2, "select item_name from item where item_code= %d"
+			,item_code_int);
+
+	/* SQLコマンド実行 */
+	res2 = PQexec(threadParam->con, sql2);
+	/* SQLコマンド実行結果状態を確認 */
+	if( PQresultStatus(res2) != PGRES_TUPLES_OK){
+	  printf("%s", PQresultErrorMessage(res2));
+	  sprintf(sendBuf, "%s %s%s test:%s", "ER_STAT2", "E_CODE", sql2,"\n");
+	  return -1;
+	}
+
+	strcpy(item_name, PQgetvalue(res2,0,0));
+
+	///////
+	sprintf(sql3, "select store_name from store where store_num = %d"
+			, ship_store_num_int);
+
+	/* SQLコマンド実行 */
+	res3 = PQexec(threadParam->con, sql3);
+	/* SQLコマンド実行結果状態を確認 */
+	if( PQresultStatus(res3) != PGRES_TUPLES_OK){
+	  printf("%s", PQresultErrorMessage(res3));
+	  sprintf(sendBuf, "%s %s%s test:%s", "ER_STAT2", "E_CODE", sql3,"\n");
+	  return -1;
+	}
+
+	strcpy(store_name, PQgetvalue(res3,0,0));
+
 
 	///resend送り先店舗名・商品番号表示
 	//count += sprintf(sendBuf+count, "%s送り先店舗番号：%d 商品番号：%d\n.\n", sendBuf1,ship_store_num_int, item_code_int );
 
 
 	if(strcmp(order_system,"t") == 0){
-	  count += sprintf(sendBuf+count,"%s送り先店舗番号：%d 商品番号：%d\n.\n"
+	  count += sprintf(sendBuf+count,"%s送り先店舗：%s 商品名：%s\n.\n"
 					   ,sendBuf1
-					   ,ship_store_num_int
-					   ,item_code_int );
+					   ,store_name
+					   ,item_name );
 	}else{
-	  count += sprintf(sendBuf+count,"%s送り先店舗番号：%d 商品番号：%d 入荷数：%d\n.\n"
+	  count += sprintf(sendBuf+count,"%s送り先店舗：%s 商品名：%s 入荷数：%d\n.\n"
 					   ,sendBuf1
-					   , ship_store_num_int
-					   , item_code_int
+					   , store_name
+					   , item_name
 					   , purchase_num_int);
 
 	}
@@ -252,6 +318,8 @@ int create_direction_recv_func(ThreadParameter *threadParam, char *sendBuf){
 	  return 0;
 	}
 
+	//PQclear(res0);
+
   }
 
 
@@ -281,12 +349,12 @@ int new_item_func(PGconn *__con,char *item_name,char *t_or_f, char *__sendBuf){
   /* SQLコマンド実行結果状態を確認 */
   if( PQresultStatus(res) != PGRES_COMMAND_OK){
 	printf("%s", PQresultErrorMessage(res));
-	sprintf(__sendBuf, "%s %s%s", "ER_STAT", "E_CODE", "\n");
+	sprintf(__sendBuf, "%s %s%s.\n", "ER_STAT", "E_CODE", "\n");
 	return -1;
   }
   /* UPDATEされた行数を取得 */
   if(atoi(PQcmdTuples(res)) == 1){
-	sprintf(__sendBuf, "%s%s", "新商品を変更しました", ENTER);
+	sprintf(__sendBuf, "%s%s.\n", "新商品を追加しました", ENTER);
   }
   /* PGresultに割当られた記憶領域を開放 */
   PQclear(res);
@@ -328,7 +396,7 @@ int create_new_direction_func(PGconn *__con,char *store_num,char *item_code,char
   /* SQLコマンド実行結果状態を確認 */
   if( PQresultStatus(res0) != PGRES_TUPLES_OK){
 	printf("%s", PQresultErrorMessage(res0));
-	sprintf(__sendBuf, "%s %s%s test:%s", "ER_STAT2", "E_CODE", sql0,"\n");
+	sprintf(__sendBuf, "%s %s%s test:%s.\n", "ER_STAT2", "E_CODE", sql0,"\n");
 	return -1;
   }
 
@@ -336,7 +404,7 @@ int create_new_direction_func(PGconn *__con,char *store_num,char *item_code,char
 
   /* UPDATEされた行数を取得 */
   if(atoi(PQcmdTuples(res0)) == 1){
-	sprintf(__sendBuf, "%s%s", "ok", ENTER);
+	sprintf(__sendBuf, "%s%s.\n", "ok", ENTER);
   }
 
 
@@ -478,7 +546,7 @@ int create_direction_func(PGconn *__con, int order_code_int, int ship_store_num_
   /* PGresultに割当られた記憶領域を開放 */
   //PQclear(res);
   PQclear(res0);
-  PQclear(res1);
+  //PQclear(res1);
 
   return 0;
 }//END

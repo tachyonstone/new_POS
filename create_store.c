@@ -4,7 +4,6 @@
  * 新店舗登録
  *  [ARGUMENT]
  *    __conn     : PGconnオブジェクト
- *    __tax       : tax
  *    __sendBuf  : 送信用配列のポインタ
  *  [RETURN]
  *    Success : 0
@@ -12,13 +11,13 @@
  */
 
 int create_store_func(PGconn *__con,char *place_num,char *store_name,char *password,char *__sendBuf){
-  char        sql[BUFSIZE];
+  char sql[BUFSIZE];
   char sql0[BUFSIZE];
   char sql1[BUFSIZE];
   char sql2[BUFSIZE];
-  PGresult    *res;   //PGresultオブジェクト
-  PGresult    *res0;   //PGresultオブジェクト
-  int         resultRows;
+  PGresult *res;  //PGresultオブジェクト
+  PGresult *res0;  //PGresultオブジェクト
+  int resultRows;
   int max;
 
   int max_row;
@@ -31,7 +30,7 @@ int create_store_func(PGconn *__con,char *place_num,char *store_name,char *passw
   /* SQLコマンド実行結果状態を確認 */
   if( PQresultStatus(res) != PGRES_COMMAND_OK){
 	printf("%s", PQresultErrorMessage(res));
-	sprintf(__sendBuf, "%s %s%s", "ER_STAT", "E_CODE", "\n");
+	sprintf(__sendBuf, "%s %s%s.\n", "ER_STAT", "E_CODE", "\n");
 	return -1;
   }
 
@@ -42,7 +41,7 @@ int create_store_func(PGconn *__con,char *place_num,char *store_name,char *passw
   /* SQLコマンド実行結果状態を確認 */
   if( PQresultStatus(res0) != PGRES_TUPLES_OK){
 	printf("%s", PQresultErrorMessage(res0));
-	sprintf(__sendBuf, "%s %s%s", "ER_STAT2", "E_CODE", "\n");
+	sprintf(__sendBuf, "%s %s%s.\n", "ER_STAT2", "E_CODE", "\n");
 	return -1;
   }
 
@@ -56,25 +55,25 @@ int create_store_func(PGconn *__con,char *place_num,char *store_name,char *passw
 
   /* 新店舗追加SQLを作成 */
   sprintf(sql0, "CREATE TABLE item_management_%d (\
-   purchase_code	  serial,\
-   item_code	      serial,\
-   available_period   bigint,\
-   inventory_num      integer,\
-   sale_unit_price    integer,\
-   profit	      integer,\
-   procurement_period bigint,\
-   order_system         bool,\
-   purchase_day       bigint,\
-   order_confirm      bool,\
-   order_interval 	  integer,\
-   safe_stock		  integer,\
-   PRIMARY KEY(purchase_code))"
+                  purchase_code	  serial,\
+                  item_code	      serial,\
+                  available_period   bigint,\
+                  inventory_num      integer,\
+                  sale_unit_price    integer,\
+                  profit	      integer,\
+                  procurement_period bigint,\
+                  order_system         bool,\
+                  purchase_day       bigint,\
+                  order_confirm      bool,\
+                  order_interval 	  integer,\
+                  safe_stock		  integer,\
+                  PRIMARY KEY(purchase_code))"
 		  , store_num);
 
   /* SQLコマンド実行 */
   res0 = PQexec(__con, sql0);
 
-  sprintf(__sendBuf, "%s%s", "テーブルを登録しました", ENTER);
+  sprintf(__sendBuf, "%s%s.\n", "テーブルを登録しました", ENTER);
 
 
 
@@ -88,25 +87,22 @@ int create_store_func(PGconn *__con,char *place_num,char *store_name,char *passw
   /* SQLコマンド実行 */
   res0 = PQexec(__con, sql1);
 
-  sprintf(__sendBuf, "%s%s", "テーブルを登録しました", ENTER);
+  sprintf(__sendBuf, "%s%s.\n", "テーブルを登録しました", ENTER);
 
 
   /* 新店舗追加SQLを作成 */
   sprintf(sql2, "CREATE TABLE mod_info_%d (\
-   slip_num	             serial,\
-   before_tax_rate	     real,\
-   before_multiple_tax_rate  real,\
-   before_point_rate         real,\
-   PRIMARY KEY(slip_num))"
+                  slip_num	             serial,\
+                  before_tax_rate	     real,\
+                  before_multiple_tax_rate  real,\
+                  before_point_rate         real,\
+                  PRIMARY KEY(slip_num))"
 		  , store_num);
 
   /* SQLコマンド実行 */
   res0 = PQexec(__con, sql2);
 
-  sprintf(__sendBuf, "%s%s", "テーブルを登録しました", ENTER);
-
-
-
+  sprintf(__sendBuf, "%s%s.\n", "テーブルを登録しました", ENTER);
 
 
 
