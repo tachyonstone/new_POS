@@ -12,13 +12,14 @@
  */
 
 int create_direction_recv_func(ThreadParameter *threadParam, char *sendBuf){
+
   char recvBuf[BUFSIZE];
   int  recvLen, sendLen;
   char recvBuf1[BUFSIZE], sendBuf1[BUFSIZE];
   int  recvLen1, sendLen1;
   char comm[BUFSIZE], comm2[BUFSIZE];   //リクエストコマンド
   float perm1Int, perm2Int, perm3Int;
-  pthread_t selfId;                      //自分自身のスレッドID
+  pthread_t selfId;                     //自分自身のスレッドID
   int cnt;
   int i,j;
 
@@ -93,7 +94,6 @@ int create_direction_recv_func(ThreadParameter *threadParam, char *sendBuf){
 	return 0;
   }
 
-
   //PQclear(res0);
 
   ///resend送り先店舗名・商品番号表示
@@ -101,7 +101,6 @@ int create_direction_recv_func(ThreadParameter *threadParam, char *sendBuf){
 
   /*発注依頼一覧表示SQL*/
   //sprintf(sql1, "SELECT * FROM item_sup_direction"); //test: a lot of data
-
 
   sprintf(sql1, "SELECT * FROM item_sup_direction\
 	WHERE purchase_confirm = 'false'");
@@ -124,7 +123,7 @@ int create_direction_recv_func(ThreadParameter *threadParam, char *sendBuf){
 	sprintf(sql0, "SELECT * FROM item_sup_direction\
                      WHERE order_code = (SELECT MIN(order_code)\
                      FROM item_sup_direction \
-                     WHERE purchase_confirm = 'false')");
+                     WHERE purchase_confirm = 'false')");  //商品補充指示書から情報取得
 
 	/* SQLコマンド実行 */
 	res0 = PQexec(threadParam->con, sql0);
@@ -140,7 +139,6 @@ int create_direction_recv_func(ThreadParameter *threadParam, char *sendBuf){
 	item_code_int = atoi(PQgetvalue(res1,i,2));  //商品コード取得
 	strcpy(purchase_num_ch, PQgetvalue(res1,i,5));  //入荷数取得
     strcpy(order_system, PQgetvalue(res1,i,8));  //発注方式取得
-
 	purchase_num_int = atoi(purchase_num_ch);
 
 
@@ -213,11 +211,12 @@ int create_direction_recv_func(ThreadParameter *threadParam, char *sendBuf){
 	  return -1;
 	}
 
-
+	/*商品補充指示書から情報取得*/
 	order_code_int = atoi(PQgetvalue(res0,0,0));  //発注番号取得
 	ship_store_num_int = atoi(PQgetvalue(res0,0,1));  //店舗番号取得
 	item_code_int = atoi(PQgetvalue(res0,0,2));  //商品コード取得
-	strcpy(purchase_num_ch, PQgetvalue(res0,0,5));  //入荷数取得 //ch
+	order_day_int =  atoi(PQgetvalue(res0,0,3));  //発注日取得
+	strcpy(purchase_num_ch, PQgetvalue(res0,0,5));  //入荷数取得
     strcpy(order_system, PQgetvalue(res0,0,8));  //発注方式取得
 
 	PQclear(res0);
@@ -273,8 +272,6 @@ int create_direction_recv_func(ThreadParameter *threadParam, char *sendBuf){
 
 	}
 
-
-
 	sendLen = strlen(sendBuf);
 	send(threadParam->soc, sendBuf, sendLen, 0);
 	printf("[C_THREAD %u] SEND=> %s\n", selfId, sendBuf);
@@ -296,18 +293,21 @@ int create_direction_recv_func(ThreadParameter *threadParam, char *sendBuf){
 							,order_code_int
 							,ship_store_num_int
 							,item_code_int
+							,order_day_int
 							,purchase_unit_price
 							,purchase_num
 							,available_period
 							,sendBuf);
+
 	}else if((sscanf(recvBuf,"%s %s", purchase_unit_price, available_period) == 2) && (strcmp(order_system,"f") == 0)){
 	  create_direction_func(threadParam->con
-							,order_code_int
-							,ship_store_num_int
-							,item_code_int
-							,purchase_unit_price
-							,purchase_num_ch  //ch
-							,available_period
+							,order_code_int  //発注番号
+							,ship_store_num_int  //送り先店舗番号
+							,item_code_int  //商品コード
+							,order_day_int
+							,purchase_unit_price  //調達期間
+							,purchase_num_ch  //入荷数
+							,available_period  //販売可能機関
 							,sendBuf);
 
 	}else if(strcmp(recvBuf,"\n")){
@@ -444,7 +444,7 @@ int create_new_direction_func(PGconn *__con,char *store_num,char *item_code,char
 
 
 ///////////////////////
-int create_direction_func(PGconn *__con, int order_code_int, int ship_store_num_int, int item_code_int, char *purchase_unit_price, char *purchase_num, char *available_period, char *__sendBuf){
+int create_direction_func(PGconn *__con, int order_code_int, int ship_store_num_int, int item_code_int, int order_day_int, char *purchase_unit_price, char *purchase_num, char *available_period, char *__sendBuf){
   char sql[BUFSIZE];
   char sql0[BUFSIZE];
   char sql1[BUFSIZE];
@@ -455,10 +455,9 @@ int create_direction_func(PGconn *__con, int order_code_int, int ship_store_num_
   PGresult    *res2;   //PGresultオブジェクト
 
   double tax_double;
-  int         resultRows;
+  int resultRows;
   int max;
 
-  int order_day_int;
   int available_period_int;
   int inventory_num_int;
   char purchase_code_seq[BUFSIZE];
@@ -468,32 +467,33 @@ int create_direction_func(PGconn *__con, int order_code_int, int ship_store_num_
   int store_num_int;
   int purchase_unit_price_int;
   int purchase_num_int;
+  int purchase_subtotal;
 
   int i,j;
-
 
   purchase_unit_price_int = atoi(purchase_unit_price);
   purchase_num_int = atoi(purchase_num);
   available_period_int = atoi(available_period);
 
-  //store_num_int = atoi(store_num);
-  //item_code_int = atoi(item_code);
-  //available_period_int = atoi(available_period);
-  //inventory_num_int = atoi(inventory_num);
+  purchase_subtotal = purchase_unit_price_int * purchase_num_int;  //仕入れ小計
+
 
   /*商品補充指示書追加*/
   sprintf(sql1, "UPDATE item_sup_direction\
                  SET purchase_unit_price = %d,\
                      purchase_num = %d,\
                      available_period = %d,\
-                     purchase_confirm = 'true'\
+                     purchase_confirm = 'true',\
+                     purchase_subtotal = %d\
                  WHERE order_code = %d\
                  AND purchase_confirm = 'false'"
 		  ,purchase_unit_price_int
 		  ,purchase_num_int
 		  ,available_period_int
+		  ,purchase_subtotal
 		  ,order_code_int
 		  );
+
   /* SQLコマンド実行 */
   res1 = PQexec(__con, sql1);
   /* SQLコマンド実行結果状態を確認 */
@@ -518,12 +518,14 @@ int create_direction_func(PGconn *__con, int order_code_int, int ship_store_num_
                  NULL,\
                  'false',\
                  NULL,\
-                 NULL)"
+                 NULL,\
+                 %d)"
 		  ,ship_store_num_int
 		  ,ship_store_num_int
 		  ,item_code_int
 		  ,available_period_int
-		  ,purchase_num_int  //
+		  ,purchase_num_int
+		  ,order_day_int
 		  );
 
   /* SQLコマンド実行 */
@@ -549,4 +551,5 @@ int create_direction_func(PGconn *__con, int order_code_int, int ship_store_num_
   //PQclear(res1);
 
   return 0;
+
 }//END
